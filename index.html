@@ -203,6 +203,11 @@ ${ids.map(i=>{const x=S.iv[i];return`<tr><td>${inp(x,'r',`S.iv[${i}]`,0,'')}</td
 <td><select onchange="S.iv[${i}].st=this.value;render()">${ST.map(v=>`<option ${v==x.st?'selected':''}>${v}</option>`).join('')}</select></td><td><button class="x" onclick="S.iv.splice(${i},1);render()">✕</button></td></tr>`}).join('')}
 <tr class="tot"><td colspan="2">Total ${gn.toLowerCase()}</td><td class="n">${N(ids.reduce((a,i)=>a+S.iv[i].pc,0),1)} %</td><td class="n">${N(ids.reduce((a,i)=>a+base*S.iv[i].pc/100,0),0)}</td><td colspan="2"></td><td class="n">${N(ids.reduce((a,i)=>a+S.iv[i].cv,0),0)}</td><td colspan="2"></td></tr></table>
 <button class="b" onclick="S.iv.push({g:'${g}',r:'Nouvel intervenant',m:'',pc:0,nom:'',ct:'',cv:0,st:'À consulter'});render()">+ Ajouter un intervenant</button>`}).join('')}`}
+// ---------- boîte de saisie (remplace prompt(), absent de la version Windows)
+function ask(msg,def=''){return new Promise(ok=>{const o=document.createElement('div');o.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;display:flex;align-items:center;justify-content:center';
+ o.innerHTML=`<div class="card" style="background:#fff;min-width:300px;max-width:90vw"><h2></h2><input><div style="text-align:right;margin-top:8px"><button class="b r">Annuler</button><button class="b">OK</button></div></div>`;
+ o.querySelector('h2').textContent=msg;const i=o.querySelector('input'),[bA,bO]=o.querySelectorAll('button'),end=v=>{o.remove();ok(v)};i.value=def;
+ bA.onclick=()=>end(null);bO.onclick=()=>end(i.value);i.addEventListener('keydown',e=>{e.stopPropagation();if(e.key=='Enter')end(i.value);if(e.key=='Escape')end(null)});document.body.appendChild(o);i.focus()})}
 // ---------- projets
 function proj(){const I=idx().sort((a,b)=>b.maj-a.maj);
  return`<h2>Mes projets</h2><p class="hint">Chaque projet regroupe ses niveaux, sa structure, ses prix, son devis, ses matériaux et ses intervenants. L'enregistrement est automatique dans ce navigateur (bouton « Enregistrer » pour forcer). Pour sauvegarder ou changer d'ordinateur, utilisez « Exporter ».</p>
@@ -211,7 +216,7 @@ ${bkBanner(I)}<button class="b" onclick="newP()">+ Nouveau projet</button><butto
 ${I.length?I.map(x=>`<tr ${x.id==S.id?'style="background:#eef6ff"':''}><td><b>${x.nom}</b>${x.id==S.id?' <span class="hint">(ouvert)</span>':''}</td><td>${new Date(x.maj).toLocaleString('fr-FR')}</td><td class="n">${x.nl}</td><td class="n">${N(x.ttc,0)}</td>
 <td><button class="b" onclick="openP('${x.id}')">Ouvrir</button><button class="b" onclick="dupP('${x.id}')">Dupliquer</button><button class="b" onclick="expP('${x.id}')">Exporter</button><button class="b r" onclick="delP('${x.id}')">Supprimer</button></td></tr>`).join(''):'<tr><td colspan="5">Aucun projet enregistré.</td></tr>'}</table>`}
 function openP(id){save();const x=localStorage.getItem('dbat_p_'+id);if(!x)return;S=JSON.parse(x);LAST='';mig();T='arch';render()}
-function newP(){const n=prompt('Nom du nouveau projet ?');if(n===null)return;save();S=def();S.id=undefined;S.nom=n||'Projet sans nom';mig();LAST='';T='arch';render()}
+async function newP(){const n=await ask('Nom du nouveau projet ?');if(n===null)return;save();S=def();S.id=undefined;S.nom=n||'Projet sans nom';mig();LAST='';T='arch';render()}
 function dupP(id){save();const x=JSON.parse(localStorage.getItem('dbat_p_'+id));x.id=undefined;x.nom=(x.nom||'Projet')+' (copie)';S=x;mig();LAST='';save(true);T='proj';render()}
 function expP(id){const x=localStorage.getItem('dbat_p_'+id);if(x)dl((JSON.parse(x).nom||'projet')+'.json',x,'application/json')}
 function delP(id){if(!confirm('Supprimer définitivement ce projet ?'))return;try{localStorage.removeItem('dbat_p_'+id);localStorage.setItem('dbat_idx',JSON.stringify(idx().filter(x=>x.id!=id)))}catch(e){}
@@ -219,8 +224,9 @@ function delP(id){if(!confirm('Supprimer définitivement ce projet ?'))return;tr
 // ---------- import PDF (lecture du texte des plans, coupes et notes de structure)
 let IMP=null;
 const nb=x=>parseFloat(String(x).replace(',','.'));
-function loadPdf(){return window.pdfjsLib?Promise.resolve():new Promise((ok,ko)=>{const c='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/',e=document.createElement('script');e.src=c+'pdf.min.js';
- e.onload=()=>{pdfjsLib.GlobalWorkerOptions.workerSrc=c+'pdf.worker.min.js';ok()};e.onerror=()=>ko(new Error('Lecteur PDF indisponible : une connexion internet est nécessaire pour cet import.'));document.head.appendChild(e)})}
+function loadPdf(){if(window.pdfjsLib)return Promise.resolve();
+ const ld=c=>new Promise((ok,ko)=>{const e=document.createElement('script');e.src=c+'pdf.min.js';e.onload=()=>{pdfjsLib.GlobalWorkerOptions.workerSrc=c+'pdf.worker.min.js';ok()};e.onerror=()=>{e.remove();ko()};document.head.appendChild(e)});
+ return ld('vendor/pdfjs/').catch(()=>ld('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/')).catch(()=>{throw new Error('Lecteur PDF indisponible : une connexion internet est nécessaire pour cet import.')})}
 async function pdfLines(f){await loadPdf();const d=await pdfjsLib.getDocument({data:await f.arrayBuffer()}).promise,out=[];
  for(let n=1;n<=d.numPages;n++){const t=await(await d.getPage(n)).getTextContent(),m={};t.items.forEach(it=>{const y=Math.round(it.transform[5]/3);(m[y]=m[y]||[]).push([it.transform[4],it.str])});
   Object.keys(m).sort((a,b)=>b-a).forEach(y=>out.push(m[y].sort((a,b)=>a[0]-b[0]).map(x=>x[1]).join(' ').replace(/\s+/g,' ').trim()))}
@@ -282,7 +288,7 @@ function mesBg(src,W,H){M.bg=src;M.W=W;M.H=H;const cv=document.getElementById('m
 function mesZoom(f){M.z*=f;redraw()}
 function mesClick(e){if(!M.bg)return;const cv=e.target,r=cv.getBoundingClientRect();let p=[(e.clientX-r.left)/M.z,(e.clientY-r.top)/M.z];const q=M.cur[M.cur.length-1];
  if(e.shiftKey&&q){Math.abs(p[0]-q[0])>Math.abs(p[1]-q[1])?p[1]=q[1]:p[0]=q[0]}M.cur.push(p);
- if(M.mode=='cal'&&M.cur.length==2){const d=dist(M.cur[0],M.cur[1]),v=parseFloat((prompt('Longueur réelle de ce segment (en mètres) ?')||'').replace(',','.'));if(v>0){M.k=v/d;M.cur=[];mesMode('l');return}M.cur=[]}
+ if(M.mode=='cal'&&M.cur.length==2){const d=dist(M.cur[0],M.cur[1]);redraw();ask('Longueur réelle de ce segment (en mètres) ?').then(r=>{const v=parseFloat((r||'').replace(',','.'));M.cur=[];if(v>0){M.k=v/d;mesMode('l')}else{redraw();mesMsg()}});return}
  if(M.mode=='h'&&M.cur.length==2){M.sh.push({t:'h',p:M.cur});M.cur=[]}redraw();mesMsg()}
 function mesEnd(){if(!M||!M.bg)return;const n=M.cur.length;if((M.mode=='l'&&n>=2)||(M.mode=='s'&&n>=3)){M.sh.push({t:M.mode,p:M.cur});M.cur=[]}redraw();mesMsg()}
 function mesUndo(){if(M.cur.length)M.cur.pop();else M.sh.pop();redraw();mesMsg()}

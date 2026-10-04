@@ -1,0 +1,46 @@
+{
+  "name": "devisbat",
+  "productName": "DevisBat",
+  "version": "1.0.0",
+  "description": "DevisBat – devis quantitatif et estimatif de bâtiment (ZEMO CONSTRUCTION)",
+  "author": "ZEMO CONSTRUCTION",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "vendor": "node scripts/vendor-pdfjs.js",
+    "dist:win": "electron-builder --win nsis portable --x64 --publish never"
+  },
+  "build": {
+    "appId": "com.zemoconstruction.devisbat",
+    "productName": "DevisBat",
+    "files": [
+      "main.js",
+      "index.html",
+      "vendor/**/*"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "DevisBat",
+      "artifactName": "DevisBat-Setup-${version}.${ext}"
+    },
+    "portable": {
+      "artifactName": "DevisBat-Portable-${version}.${ext}"
+    }
+  },
+  "devDependencies": {
+    "electron": "^33.4.11",
+    "electron-builder": "^25.1.8",
+    "pdfjs-dist": "^3.11.174"
+  }
+}

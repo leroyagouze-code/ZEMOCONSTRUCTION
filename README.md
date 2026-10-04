@@ -17,3 +17,27 @@ Outils de ZEMO CONSTRUCTION pour la réalisation de devis quantitatifs et estima
 ### Utilisation
 
 Ouvrir `index.html` dans un navigateur, sans aucune installation. Les données sont enregistrées dans le navigateur (localStorage) : utiliser régulièrement « Sauvegarde complète » pour ne pas les perdre. L'import PDF et la mesure sur plan PDF nécessitent une connexion internet.
+
+## Version Windows
+
+DevisBat existe aussi en application Windows (Electron), qui fonctionne **sans connexion internet**, y compris l'import et la mesure de plans PDF.
+
+### Télécharger
+Dans l'onglet **Actions** du dépôt, ouvrir la dernière exécution réussie de « Version Windows », puis télécharger l'archive **DevisBat-Windows**. Elle contient :
+- `DevisBat-Setup-<version>.exe` : installeur (raccourci sur le bureau et dans le menu Démarrer) ;
+- `DevisBat-Portable-<version>.exe` : version portable, sans installation (clé USB).
+
+Pour publier une version officielle, créer un tag `v1.0.0` : les deux fichiers sont alors joints à une *Release* GitHub.
+
+L'application n'étant pas signée numériquement, Windows SmartScreen peut afficher « Windows a protégé votre ordinateur » : cliquer sur **Informations complémentaires** puis **Exécuter quand même**.
+
+### Données
+Les projets sont enregistrés dans `%APPDATA%\DevisBat` (menu **Aide > Ouvrir le dossier des données**), indépendamment des navigateurs. Les exports `.json` restent compatibles entre la version web et la version Windows.
+
+### Développement
+```
+npm install
+npm run vendor   # copie pdf.js dans vendor/ pour le mode hors connexion
+npm start        # lance l'application
+npm run dist:win # construit l'installeur et la version portable (sous Windows)
+```
