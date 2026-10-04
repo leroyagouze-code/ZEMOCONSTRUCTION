@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DevisBat – Devis quantitatif et estimatif</title>
+<style>
+*{box-sizing:border-box}body{font:13px Arial,sans-serif;margin:0;background:#f3f5f9;color:#1c2333}
+header{background:#1F3864;color:#fff;padding:10px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+header h1{font-size:17px;margin:0}header input{padding:4px;border-radius:4px;border:0;min-width:220px}
+nav{display:flex;gap:2px;background:#dfe6f3;padding:6px 12px 0;flex-wrap:wrap}
+nav button{border:0;padding:9px 16px;background:#c8d3e8;border-radius:6px 6px 0 0;cursor:pointer;font-weight:bold;color:#1F3864}
+nav button.on{background:#fff}
+main{background:#fff;padding:14px 16px;min-height:80vh}
+table{border-collapse:collapse;width:100%;margin:8px 0 14px}th,td{border:1px solid #cfd6e4;padding:3px 5px}
+th{background:#1F3864;color:#fff;font-size:12px}td.n{text-align:right}tr.cat td{background:#D9E2F3;font-weight:bold}
+tr.ph2 td{background:#cfe0f7;font-weight:bold;color:#1F3864}tr.ph td{background:#2E5CA8;color:#fff;font-weight:bold;font-size:14px}#mes{position:fixed;inset:0;background:#fff;z-index:99;display:flex;flex-direction:column}#mes .mt{padding:8px;background:#1F3864;color:#fff;display:flex;gap:6px;flex-wrap:wrap;align-items:center}#mes .mt select,#mes .mt input{width:auto}#mes .cw{flex:1;overflow:auto;background:#777}#mes canvas{cursor:crosshair;display:block;margin:0 auto;background:#fff}#mes button.on{outline:3px solid #ffd54a}#mes .ms{padding:6px 10px;background:#eef1f7;font-size:13px}
+tr.sp td{background:#b8c7e6;font-weight:bold;color:#1F3864}tr.tot td{background:#eef1f7;font-weight:bold}tr.big td{background:#1F3864;color:#fff;font-weight:bold}
+input,select{font:inherit;padding:3px;border:1px solid #b9c3d8;border-radius:3px;width:100%}
+td input.num{text-align:right;width:82px}button.b{background:#2E5CA8;color:#fff;border:0;padding:6px 12px;border-radius:5px;cursor:pointer;margin:2px}
+button.b.r{background:#b33}button.x{border:0;background:none;color:#b33;cursor:pointer;font-size:15px}
+.card{border:1px solid #cfd6e4;border-radius:8px;padding:10px;margin:0 0 14px}h2{font-size:15px;color:#1F3864;margin:4px 0}
+.g{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px}.g label{font-size:12px;color:#555}
+.hint{color:#666;font-size:12px}@media print{header,nav,.np{display:none}main{padding:0}}
+</style></head><body>
+<header><h1>DevisBat</h1><input id="nom" placeholder="Nom du projet" onchange="S.nom=this.value;save()">
+<span style="flex:1"></span><span class="np"><span id="sv" style="font-size:12px;margin-right:6px"></span><button class="b" onclick="saveNow()">💾 Enregistrer</button><button class="b" onclick="T='proj';render()">📁 Projets</button><button class="b" onclick="saveF()">⬇ Exporter</button></span>
+<input type="file" id="lf" accept=".json" style="display:none" onchange="loadF(this)"></header>
+<nav id="nav"></nav><main id="m"></main>
+<script>
+const E=['BP','Semelles','Longrines','Poteaux','Poutres','Dalles','Chaînages','Escaliers','Voiles','Autre'];
+const D=['HA6','HA8','HA10','HA12','HA14','HA16','HA20','HA25'];
+const LV=(n,t)=>({n,s:0,l:0,h:3,ea:15,pl:'dalle',pt:'cc',pe:.05,pv:0,ep:t=='rdc'?0.1:0,ns:0,fen:0,por:0});
+const PX=[
+['go','first','Installation de chantier','Implantation de l\'ouvrage','Ens',150000,'m',1],['go','first','Installation de chantier','Nettoyage général du site','Ens',50000,'m',1],
+['go','first','Terrassement et fondations','Fouilles en rigoles','m³',1500,'fouille',1],['go','first','Terrassement et fondations','Remblai provenant des fouilles','m³',2000,'remb_fo',1],
+['go','first','Terrassement et fondations','Remblai d\'apport y compris compactage','m³',5500,'remb_ap',1],['go','first','Terrassement et fondations','Béton de propreté dosé à 150 kg/m³','m³',70000,'V:BP',1],
+['go','first','Terrassement et fondations','Béton armé pour semelles','m³',100000,'V:Semelles',1],['go','first','Terrassement et fondations','Agglomérés pleins de {ef} cm pour fondations','m²',5500,'fond',1],
+['go','all','Gros œuvre','Béton armé pour longrines','m³',100000,'V:Longrines',1],['go','all','Gros œuvre','Béton armé pour poteaux','m³',100000,'V:Poteaux',1],
+['go','all','Gros œuvre','Béton armé pour chaînages','m³',100000,'V:Chaînages',1],['go','all','Gros œuvre','Béton armé pour poutres','m³',100000,'V:Poutres',1],
+['go','all','Gros œuvre','Béton armé pour escaliers','m³',105000,'V:Escaliers',1],['go','all','Gros œuvre','Béton armé pour voiles','m³',100000,'V:Voiles',1],
+['go','all','Gros œuvre','Dallage au sol','m³',100000,'dal',1],['go','all','Gros œuvre','Dalle pleine en béton armé','m³',100000,'vpleine',1],['go','all','Gros œuvre','Dalle nervurée en béton armé','m³',100000,'vnerv',1],['go','all','Gros œuvre','Plancher en corps creux (poutrelles, hourdis, table de compression)','m²',25000,'scc',1],
+['go','all','Gros œuvre','Agglomérés creux de {ea} cm pour murs d\'élévation','m²',5000,'elev',1],['go','all','Gros œuvre','Enduits verticaux intérieurs et extérieurs','m²',3200,'enduit',1],
+['go','all','Gros œuvre','Enduits sous dalle','m²',3000,'ensd',1],
+['so','all','Toiture et étanchéité','Toiture en bac alu y compris charpente','m²',13000,'toit',1],['so','all','Toiture et étanchéité','Étanchéité multicouche sur terrasse','m²',8000,'etanch',1],
+['so','first','Assainissement','Fosse septique','Ens',750000,'m',1],['so','first','Assainissement','Puisard','Ens',180000,'m',2],
+['so','all','Lots techniques et menuiseries','Électricité (ensemble)','Ens',2500000,'un',1],['so','all','Lots techniques et menuiseries','Plomberie sanitaire (ensemble)','Ens',1800000,'un',1],
+['so','all','Lots techniques et menuiseries','Climatisation (ensemble)','Ens',1500000,'un',1],['so','all','Lots techniques et menuiseries','Fenêtres','m²',65000,'fen',1],['so','all','Lots techniques et menuiseries','Portes','u',145000,'por',1],
+['fi','all','Revêtements','Carrelage grès cérame au sol y compris plinthes','m²',13500,'plan',1],['fi','all','Revêtements','Faïence sur murs des sanitaires','m²',11000,'faience',1],
+['fi','all','Faux plafond, enduits plâtre et peinture','Faux plafond en plâtre','m²',8000,'plan',1],['fi','all','Faux plafond, enduits plâtre et peinture','Enduit plâtre sur murs intérieurs','m²',2500,'elev',1],
+['fi','all','Faux plafond, enduits plâtre et peinture','Peinture sur murs intérieurs','m²',2000,'elev',1],['fi','all','Faux plafond, enduits plâtre et peinture','Peinture sur façades','m²',2000,'elev',1]
+].map(a=>({ph:a[0],on:a[1],c:a[2],d:a[3],u:a[4],pu:a[5],src:a[6],k:a[7],ql:{}}));
+const PH={go:'GROS ŒUVRE',so:'SECOND ŒUVRE',fi:'FINITION'};
+const SRC={m:'Saisie manuelle',fouille:'Volume de fouilles',remb_fo:'Remblai issu des fouilles',remb_ap:'Remblai d\'apport',fond:'Surface murs de fondation',elev:'Surface murs d\'élévation',enduit:'Surface enduits (2 faces)',agg:'Nombre d\'agglos',plan:'Surface de plancher',dal:'Volume dallage',dalle:'Surface plancher haut',vpleine:'Volume dalle pleine',vnerv:'Volume dalle nervurée',scc:'Surface plancher corps creux',un:'Forfait (1 par niveau)',ensd:'Enduit sous dalle',etanch:'Surface étanchéité',toit:'Surface toiture',faience:'Surface faïence',fen:'Surface fenêtres',por:'Nombre de portes'};
+E.forEach(e=>SRC['V:'+e]='Volume '+e);
+const defSt=l=>E.map(e=>({l,e,v:0,a:D.map(()=>0)}));
+function def(){return{nom:'',lv:[LV('RDC','rdc')],st:defSt(0),fd:{h:1.2,ea:20,lin:0},px:JSON.parse(JSON.stringify(PX)),pm:{},iv:IV0(),
+p:{gr:.8,sa:.4,bp:150,da:300,ba:350,eau:.5,pe:5,sm:.03,cm:.25,se:.015,ce:7.5,ag:12.5,imp:5,tva:18,cl:3,ebp:.05,pr:50,ct:1.15,ced:1.2,hch:.2,sf:22,rf:.12,mp:20}}}
+const IV0=()=>[
+['pil','Maître d\'ouvrage','Propriétaire : décisions, financement, réception',0],['pil','Maître d\'œuvre / Architecte','Conception, permis, direction et suivi des travaux',0],['pil','BET Structure','Calcul béton armé, plans de ferraillage, visa des ouvrages',0],
+['pil','BET Fluides / Électricité','Plans électricité, plomberie, climatisation',0],['pil','Économiste de la construction','Métrés, DQE, suivi des situations de travaux',0],['pil','Bureau de contrôle','Contrôle technique de la solidité et de la sécurité',0],
+['pil','Coordonnateur SPS','Sécurité et protection de la santé sur le chantier',0],['pil','Géomètre-topographe','Bornage, implantation, relevés',0],['pil','Laboratoire géotechnique / béton','Étude de sol, essais de béton et d\'acier',0],
+['pil','Conducteur de travaux / Chef de chantier','Planning, approvisionnement, coordination des corps d\'état',0],
+['go','Terrassier','Fouilles, remblais, compactage, évacuation des déblais',8],['go','Maçon','Fondations, agglos, enduits, chaînages, dallage',40],['go','Ferrailleur','Coupe, façonnage et pose des armatures',20],
+['go','Coffreur / Boiseur','Coffrage et étaiement : semelles, poteaux, poutres, dalles',15],['go','Bétonnier / Centrale à béton','Fourniture et mise en œuvre du béton',12],['go','Manœuvres / Aides','Manutention, approvisionnement, nettoyage',5],
+['so','Plombier','Alimentation, évacuations, appareils sanitaires',20],['so','Électricien','Courants forts et faibles, tableaux, appareillage',25],['so','Frigoriste / Climaticien','Climatisation, ventilation',20],
+['so','Étanchéiste','Étanchéité des terrasses, relevés',10],['so','Menuisier aluminium / Vitrier','Fenêtres, baies vitrées, garde-corps',15],['so','Charpentier / Couvreur','Charpente et couverture (bac alu)',10],
+['fi','Peintre','Enduit plâtre, peinture intérieure et façades',30],['fi','Carreleur','Carrelage, plinthes, faïence',40],['fi','Plaquiste / Staffeur','Faux plafonds',20],['fi','Nettoyage de fin de chantier','Nettoyage et remise du bâtiment',10]
+].map(a=>({g:a[0],r:a[1],m:a[2],pc:a[3],nom:'',ct:'',cv:0,st:'À consulter'}));
+let S=def(),T='proj',SV=0,LAST='';
+try{const c=localStorage.getItem('dbat_cur'),x=c&&localStorage.getItem('dbat_p_'+c);if(x)S=JSON.parse(x);else{const o=localStorage.getItem('devisbat');if(o)S=JSON.parse(o)}}catch(e){}
+const idx=()=>{try{return JSON.parse(localStorage.getItem('dbat_idx')||'[]')}catch(e){return[]}};
+function ttcNow(){try{const t=totPh(),G=t.go+t.so+t.fi;return G*(1+S.p.imp/100)*(1+S.p.tva/100)}catch(e){return 0}}
+function save(force){try{if(!S.id)S.id='p'+Date.now().toString(36);const str=JSON.stringify(S);if(str==LAST&&!force)return;LAST=str;SV=Date.now();
+ localStorage.setItem('dbat_p_'+S.id,str);localStorage.setItem('dbat_cur',S.id);const e={id:S.id,nom:S.nom||'Projet sans nom',maj:SV,ttc:ttcNow(),nl:S.lv.length},I=idx(),k=I.findIndex(x=>x.id==S.id);k<0?I.push(e):I[k]=e;localStorage.setItem('dbat_idx',JSON.stringify(I))}catch(e){}}
+function saveNow(){save(true);render()}
+const N=(x,d=2)=>(+x||0).toLocaleString('fr-FR',{minimumFractionDigits:d,maximumFractionDigits:d});
+const $=id=>document.getElementById(id);
+// ---------- calculs
+function calc(){const p=S.p,fd=S.fd,R={V:{},lv:[],lvS:[],ac:D.map(()=>0),plan:0,fd:{}},l0=S.lv[0]||LV('x','rdc');
+ const lf=fd.lin||l0.l,wf=p.cl*fd.ea/100,fo=lf*wf*fd.h,rt=Math.max(0,l0.s*(fd.h-l0.ep)),rf=Math.min(fo*p.pr/100,rt);
+ Object.assign(R.fd,{lf,wf,fouille:fo,rtot:rt,remb_fo:rf,remb_ap:rt-rf,fond:lf*fd.h,bp:lf*wf*p.ebp});
+ S.lv.forEach((L,i)=>{const o={n:L.n,vol:0,kg:0,sab:0,gra:0,ac:D.map(()=>0)},sv={V:{}};
+  const add=(v,dos)=>{o.vol+=v;o.kg+=v*dos;o.sab+=v*p.sa;o.gra+=v*p.gr};
+  S.st.filter(r=>r.l==i).forEach(r=>{const v=+r.v||0;R.V[r.e]=(R.V[r.e]||0)+v;sv.V[r.e]=(sv.V[r.e]||0)+v;add(v,r.e=='BP'?p.bp:p.ba);r.a.forEach((k,j)=>{R.ac[j]+=+k||0;o.ac[j]+=+k||0})});
+  const au=(e,v,dos)=>{if(!(sv.V[e]>0)&&v>0){sv.V[e]=v;add(v,dos)}};
+  if(i==0)au('BP',R.fd.bp,p.bp);au('Chaînages',L.l*L.ea/100*p.hch,p.ba);
+  const hasD=(L.pl=='dalle'||L.pl=='terrasse');if(hasD)au('Dalles',L.pv>0?+L.pv:L.s*L.pe,p.ba);const vd=sv.V.Dalles||0;
+  const dv=(L.s*L.ep)||0;add(dv,p.da);
+  const el=L.l*L.h,f2=i==0?R.fd.fond:0,en=2*el,dl=(L.pl=='dalle'||L.pl=='terrasse')?+L.s:0;
+  Object.assign(sv,{un:1,vpleine:L.pt=='pleine'?vd:0,vnerv:L.pt=='nerv'?vd:0,scc:hasD&&L.pt=='cc'?+L.s:0,vpl:vd,dal:dv,elev:el,enduit:en,plan:+L.s||0,fond:f2,agg:(el+f2)*p.ag,dalle:dl,ensd:dl*p.ced,etanch:L.pl=='terrasse'?+L.s:0,toit:L.pl=='toiture'?L.s*p.ct:0,
+   faience:L.ns*p.sf,fen:L.fen>0?+L.fen:L.s*p.rf,por:L.por>0?+L.por:Math.round(L.s/p.mp),fouille:i?0:fo,remb_fo:i?0:R.fd.remb_fo,remb_ap:i?0:R.fd.remb_ap});
+  R.plan+=+L.s||0;R.lvS.push(sv);
+  o.ag=sv.agg;o.sab+=(el+f2)*p.sm+en*p.se;o.kgm=(el+f2)*p.cm*50+en*p.ce;
+  o.sacs=(o.kg+o.kgm)/50;o.eau=(o.kg+o.kgm)*p.eau/1000;R.lv.push(o)});
+ return R}
+const bs=(src,s)=>src.startsWith('V:')?(s.V[src.slice(2)]||0):(s[src]||0);
+const ap=(x,i)=>x.on=='all'||(x.on=='first'&&i==0)||(x.on=='last'&&i==S.lv.length-1);
+function qty(x,R,i){if(!ap(x,i))return 0;if(x.src=='m')return x.on=='all'?+(x.ql&&x.ql[i])||0:+x.k||0;return bs(x.src,R.lvS[i])*(+x.k||0)}
+const qtot=(x,R)=>S.lv.reduce((a,L,i)=>a+qty(x,R,i),0);
+// ---------- onglets
+const TABS={proj:'📁 Projets',arch:'1. Architecture',str:'2. Structure',px:'3. Prix',dqe:'4. Devis (DQE)',mat:'5. Quantités et achat matériaux',iv:'6. Intervenants'};
+function render(){$('nom').value=S.nom;$('nav').innerHTML=Object.entries(TABS).map(([k,v])=>`<button class="${k==T?'on':''}" onclick="T='${k}';render()">${v}</button>`).join('');
+ $('m').innerHTML=({proj,arch,str,px,dqe,mat,iv})[T]();save();$('sv').textContent=SV?'✔ Enregistré à '+new Date(SV).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}):''}
+const set=(o,k,v,num=1)=>{o[k]=num?(parseFloat(String(v).replace(',','.'))||0):v;render()};
+const inp=(o,k,ref,num=1,cls='num')=>`<input class="${cls}" value="${o[k]}" onchange="set(${ref},'${k}',this.value,${num})">`;
+const selc=(o,k,ref,opts,num=1)=>`<select onchange="set(${ref},'${k}',this.value,${num})">${opts.map(([v,t])=>`<option value="${v}" ${v==o[k]?'selected':''}>${t}</option>`).join('')}</select>`;
+const EA=[10,12,15,20].map(v=>[v,v+' cm']),PL=[['dalle','Plancher haut simple'],['terrasse','Terrasse étanchée'],['toiture','Sous toiture légère'],['aucun','Aucun']],PT=[['cc','Corps creux'],['pleine','Dalle pleine'],['nerv','Dalle nervurée']];
+function setPt(i,v){const L=S.lv[i];L.pt=v;L.pe={cc:.05,pleine:.15,nerv:.10}[v];render()}
+function arch(){const R=calc(),f=S.fd,F=R.fd;
+ return`<h2>1. Import des plans (PDF)</h2>${impPanel('arch')}
+<h2>2. Données à renseigner – niveaux</h2><p class="hint">Saisissez seulement les cellules blanches. Le volume du plancher = surface × épaisseur (corps creux : table de compression ; dalle pleine ; dalle nervurée : épaisseur équivalente). Renseignez « Volume plancher » pour le corriger.</p>
+<table><tr><th>Niveau</th><th>Surface bâtie (m²)</th><th>Linéaire murs (m)</th><th>Hauteur murs (m)</th><th>Ép. agglos</th><th>Type de plancher</th><th>Ép. plancher (m)</th><th>Volume plancher (m³) <small>0 = auto</small></th><th>Plancher haut</th><th>Ép. dallage (m)</th><th>Pièces d'eau</th><th>Fenêtres m² <small>(0=auto)</small></th><th>Portes <small>(0=auto)</small></th><th></th></tr>
+${S.lv.map((L,i)=>`<tr><td>${inp(L,'n',`S.lv[${i}]`,0,'')}</td>${['s','l','h'].map(k=>`<td>${inp(L,k,`S.lv[${i}]`)}</td>`).join('')}<td>${selc(L,'ea',`S.lv[${i}]`,EA)}</td>
+<td><select onchange="setPt(${i},this.value)">${PT.map(([v,t])=>`<option value="${v}" ${v==L.pt?'selected':''}>${t}</option>`).join('')}</select></td><td>${inp(L,'pe',`S.lv[${i}]`)}</td><td>${inp(L,'pv',`S.lv[${i}]`)}</td><td>${selc(L,'pl',`S.lv[${i}]`,PL,0)}</td>${['ep','ns','fen','por'].map(k=>`<td>${inp(L,k,`S.lv[${i}]`)}</td>`).join('')}<td><button class="x" onclick="delLv(${i})">✕</button></td></tr>`).join('')}</table>
+<button class="b" onclick="addLv()">+ Ajouter un niveau</button>
+<div class="card"><h2>Fondation</h2><div class="g"><div><label>Hauteur de fondation (m)</label>${inp(f,'h','S.fd')}</div><div><label>Épaisseur agglos de fondation</label>${selc(f,'ea','S.fd',EA)}</div><div><label>Linéaire de fondation (m) – 0 = linéaire murs du niveau bas</label>${inp(f,'lin','S.fd')}</div></div></div>
+<h2>3. Résultats automatiques</h2><table><tr><th>Niveau</th><th>Surf. murs (m²)</th><th>Agglos (u)</th><th>Surf. enduits 2 faces</th><th>Surf. peinture int. + façade</th><th>Vol. dallage (m³)</th><th>Vol. plancher (m³)</th><th>Toiture (m²)</th><th>Fenêtres (m²)</th><th>Portes (u)</th></tr>
+${R.lvS.map((v,i)=>`<tr><td>${S.lv[i].n}</td>${[v.elev,v.agg,v.enduit,v.elev*2,v.dal,v.vpl,v.toit,v.fen,v.por].map((x,k)=>`<td class="n">${N(x,k==1||k==8?0:2)}</td>`).join('')}</tr>`).join('')}</table>
+<table><tr><th>Fondation et terrassement</th><th>Largeur fouille (m)</th><th>Volume fouilles (m³)</th><th>Remblai total (m³)</th><th>Dont issu des fouilles</th><th>Remblai d'apport</th><th>Surf. murs fondation</th><th>Agglos fondation (u)</th><th>Béton de propreté auto (m³)</th></tr>
+<tr><td>Largeur = ${S.p.cl} × épaisseur agglos ; profondeur = hauteur de fondation</td>${[F.wf,F.fouille,F.rtot,F.remb_fo,F.remb_ap,F.fond,F.fond*S.p.ag,F.bp].map((x,k)=>`<td class="n">${N(x,k==6?0:2)}</td>`).join('')}</tr></table>
+<div class="card"><h2>Coefficients (modifiables)</h2><div class="g">${[['cl','Largeur fouille = coef × ép. agglos'],['pr','Part des fouilles réutilisée en remblai (%)'],['ebp','Épaisseur béton de propreté (m)'],['hch','Hauteur des chaînages (m)'],['ct','Coef. toiture (pente + débords)'],['ced','Coef. enduit sous dalle'],['sf','Faïence par pièce d\'eau (m²)'],['rf','Fenêtres auto : m² par m² de plancher'],['mp','Portes auto : m² de plancher par porte'],['ag','Agglos par m² de mur'],['sm','Sable mortier pose (m³/m²)'],['cm','Ciment mortier pose (sac/m²)'],['se','Sable enduit (m³/m²)'],['ce','Ciment enduit (kg/m²)']].map(([k,l])=>`<div><label>${l}</label>${inp(S.p,k,'S.p')}</div>`).join('')}</div></div>`}
+function addLv(){const i=S.lv.length;S.lv.push(LV(i?'R+'+i:'RDC'));S.st.push(...defSt(i));render()}
+function delLv(i){if(!confirm('Supprimer ce niveau et sa structure ?'))return;S.lv.splice(i,1);S.st=S.st.filter(r=>r.l!=i);S.st.forEach(r=>{if(r.l>i)r.l--});
+ S.px.forEach(x=>{const q={};Object.keys(x.ql||{}).forEach(k=>{k=+k;if(k<i)q[k]=x.ql[k];else if(k>i)q[k-1]=x.ql[k]});x.ql=q});render()}
+function str(){return`<h2>Import du dossier structure</h2>${impPanel('str')}<h2>Données de structure par niveau</h2><p class="hint">Saisissez les volumes de béton (m³) et les aciers (kg par diamètre), ou importez un fichier CSV (séparateur « ; ») : <b>niveau;élément;volume;HA6;HA8;HA10;HA12;HA14;HA16;HA20;HA25</b>.
+<b>Volume de béton de propreté et de chaînages à 0 = calcul automatique.</b> Le niveau est repéré par son numéro (1, 2, 3…) ou son nom. <b>Chaînages : laissez 0 pour un calcul automatique</b> (linéaire × section).</p>
+<button class="b" onclick="document.getElementById('cf').click()">📥 Importer un CSV structure</button><input type="file" id="cf" accept=".csv,.txt" style="display:none" onchange="impCsv(this)">
+<button class="b" onclick="expStr()">📤 Exporter le modèle CSV</button>
+${S.lv.map((L,i)=>`<h2>${L.n}</h2><table><tr><th>Élément</th><th>Volume béton (m³)</th>${D.map(d=>`<th>${d} (kg)</th>`).join('')}<th></th></tr>
+${S.st.map((r,j)=>r.l!=i?'':`<tr><td>${inp(r,'e',`S.st[${j}]`,0,'')}</td><td>${inp(r,'v',`S.st[${j}]`)}</td>${D.map((d,k)=>`<td><input class="num" style="width:64px" value="${r.a[k]}" onchange="S.st[${j}].a[${k}]=parseFloat(this.value.replace(',','.'))||0;render()"></td>`).join('')}<td><button class="x" onclick="S.st.splice(${j},1);render()">✕</button></td></tr>`).join('')}</table>
+<button class="b" onclick="S.st.push({l:${i},e:'Autre',v:0,a:D.map(()=>0)});render()">+ Ajouter un élément</button>`).join('')}`}
+function impCsv(el){const f=el.files[0];if(!f)return;f.text().then(t=>{let n=0;t.split(/\r?\n/).forEach(ln=>{const c=ln.split(';');if(c.length<3||isNaN(parseFloat(c[2].replace(',','.'))))return;
+ let li=S.lv.findIndex(L=>L.n.toLowerCase()==c[0].trim().toLowerCase());if(li<0)li=(parseInt(c[0])||1)-1;if(li<0||li>=S.lv.length)return;
+ const e=c[1].trim(),v=parseFloat(c[2].replace(',','.'))||0,a=D.map((d,k)=>parseFloat((c[3+k]||'0').replace(',','.'))||0);
+ const r=S.st.find(x=>x.l==li&&x.e.toLowerCase()==e.toLowerCase());if(r){r.v=v;r.a=a}else S.st.push({l:li,e,v,a});n++});alert(n+' ligne(s) importée(s)');render()})}
+function expStr(){dl('structure.csv',['niveau;élément;volume;'+D.join(';'),...S.st.map(r=>[S.lv[r.l].n,r.e,r.v,...r.a].join(';'))].join('\n'))}
+const cats=ph=>[...new Set(S.px.filter(x=>x.ph==ph).map(x=>x.c))];
+const ONS=[['all','Chaque niveau'],['first','Niveau le plus bas'],['last','Dernier niveau']];
+function renCat(ph,ci,v){const c=cats(ph)[ci];S.px.forEach(x=>{if(x.ph==ph&&x.c==c)x.c=v});render()}
+function delCat(ph,ci){if(!confirm('Supprimer la catégorie ?'))return;const c=cats(ph)[ci];S.px=S.px.filter(x=>!(x.ph==ph&&x.c==c));render()}
+function onCat(ph,ci,v){const c=cats(ph)[ci];S.px.forEach(x=>{if(x.ph==ph&&x.c==c)x.on=v});render()}
+function addLine(ph,ci){const c=cats(ph)[ci];let ix=-1,on='all';S.px.forEach((x,j)=>{if(x.ph==ph&&x.c==c){ix=j;on=x.on}});
+ S.px.splice(ix+1,0,{ph,on,c,d:'Nouvelle désignation',u:'m³',pu:0,src:'m',k:0,ql:{}});render()}
+function addCat(ph){S.px.push({ph,on:'all',c:'Nouvelle catégorie',d:'Nouvelle désignation',u:'m³',pu:0,src:'m',k:0,ql:{}});render()}
+function setQl(j,i,v){const x=S.px[j];x.ql=x.ql||{};x.ql[i]=parseFloat(String(v).replace(',','.'))||0;render()}
+function mig(){const d=def();if(!S.px||S.px.some(x=>!x.on))S.px=JSON.parse(JSON.stringify(PX));S.p={...d.p,...S.p};S.pm=S.pm||{};if(!S.iv)S.iv=IV0();
+ if(!S.fd)S.fd={h:(S.lv[0]&&S.lv[0].hf)||1.2,ea:20,lin:(S.lv[0]&&S.lv[0].lf)||0};S.lv=S.lv.map(L=>({...LV('x'),...L}))}
+function px(){const R=calc();
+ return`<h2>Bordereau de prix – Gros œuvre, Second œuvre, Finition</h2><p class="hint">Renseignez le prix unitaire. Les quantités sont automatiques (source × coefficient). Chaque catégorie s'applique à <b>chaque niveau</b>, au <b>niveau le plus bas</b> (chantier, fondations) ou au <b>dernier niveau</b>. Dans les désignations, {ea} et {ef} sont remplacés par l'épaisseur des agglos.</p>
+${Object.entries(PH).map(([ph,pn])=>`<h2 style="background:#1F3864;color:#fff;padding:6px 10px;border-radius:5px">${pn}</h2>`+cats(ph).map((c,ci)=>{const on=S.px.find(x=>x.ph==ph&&x.c==c).on;
+ return`<table><tr class="cat"><td colspan="7"><input value="${c.replace(/"/g,'&quot;')}" style="font-weight:bold;width:50%" onchange="renCat('${ph}',${ci},this.value)">
+ <select style="width:160px" onchange="onCat('${ph}',${ci},this.value)">${ONS.map(([v,t])=>`<option value="${v}" ${v==on?'selected':''}>${t}</option>`).join('')}</select>
+ <button class="x" title="Supprimer la catégorie" onclick="delCat('${ph}',${ci})">🗑</button></td></tr>
+<tr><th>Désignation</th><th>Unité</th><th>Source de quantité</th><th>Coef. / Qté</th><th>PU (FCFA)</th><th>Montant total</th><th></th></tr>
+${S.px.map((x,i)=>!(x.ph==ph&&x.c==c)?'':`<tr><td>${inp(x,'d',`S.px[${i}]`,0,'')}</td><td style="width:60px">${inp(x,'u',`S.px[${i}]`,0,'')}</td>
+<td><select onchange="S.px[${i}].src=this.value;render()">${[...Object.entries(SRC),...E.map(e=>['V:'+e,'Volume '+e])].map(([k,v])=>`<option value="${k}" ${k==x.src?'selected':''}>${v}</option>`).join('')}</select></td>
+<td>${x.on=='all'&&x.src=='m'?S.lv.map((L,li)=>`<div style="white-space:nowrap">${L.n} <input class="num" style="width:62px" value="${(x.ql&&x.ql[li])||0}" onchange="setQl(${i},${li},this.value)"></div>`).join(''):inp(x,'k',`S.px[${i}]`)+(x.src!='m'?`<div class="hint">≈ ${N(qtot(x,R))}</div>`:'')}</td>
+<td>${inp(x,'pu',`S.px[${i}]`)}</td><td class="n">${N(qtot(x,R)*x.pu,0)}</td><td><button class="x" onclick="S.px.splice(${i},1);render()">✕</button></td></tr>`).join('')}</table>
+<button class="b" onclick="addLine('${ph}',${ci})">+ Ajouter une ligne</button>`}).join('')+`<div><button class="b" onclick="addCat('${ph}')">+ Ajouter une catégorie</button></div>`).join('<hr>')}
+<div class="card"><h2>Taux</h2><div class="g"><div><label>Aléas et imprévus (%)</label>${inp(S.p,'imp','S.p')}</div><div><label>TVA (%)</label>${inp(S.p,'tva','S.p')}</div></div></div>`}
+function dqe(){const R=calc(),hz=S.hz!==false,rows=[],lt=[],pht={go:0,so:0,fi:0};
+ let h=`<div class="np"><button class="b" onclick="window.print()">🖨 Imprimer / PDF</button><button class="b" onclick="expDqe()">📤 Export CSV</button>
+<label style="margin-left:10px"><input type="checkbox" style="width:auto" ${hz?'checked':''} onchange="S.hz=this.checked;render()"> Masquer les lignes à quantité nulle</label></div>
+<h2 style="font-size:18px">DEVIS QUANTITATIF ET ESTIMATIF</h2><b>${S.nom||'Projet sans nom'}</b><table><tr><th>N°</th><th>Désignation des travaux</th><th>U</th><th>Quantité</th><th>PU (FCFA)</th><th>Montant (FCFA)</th></tr>`;
+ const R2=(a,b,c)=>rows.push([a,b,'','','',c===undefined?'':Math.round(c)]);
+ S.lv.forEach((L,i)=>{const A=String.fromCharCode(65+i);let lvt=0,sec=0;
+  h+=`<tr class="ph"><td>${A}</td><td colspan="5">${L.n.toUpperCase()}</td></tr>`;R2(A,L.n.toUpperCase());
+  Object.entries(PH).forEach(([k,pn])=>{let pt=0;h+=`<tr class="sp"><td></td><td colspan="5">${pn} – ${L.n}</td></tr>`;R2('',pn+' – '+L.n);
+   cats(k).forEach(c=>{const ls=S.px.filter(x=>x.ph==k&&x.c==c).map(x=>({x,q:qty(x,R,i)})).filter(o=>ap(o.x,i)&&!(hz&&o.q==0));if(!ls.length)return;
+    sec++;let t=0,n=0;h+=`<tr class="cat"><td>${A}.${sec}</td><td colspan="5">${c.toUpperCase()}</td></tr>`;R2(A+'.'+sec,c.toUpperCase());
+    ls.forEach(({x,q})=>{const m=q*x.pu,d=x.d.replace('{ea}',L.ea).replace('{ef}',S.fd.ea);t+=m;n++;rows.push([A+'.'+sec+'.'+n,d,x.u,q.toFixed(2),x.pu,Math.round(m)]);
+     h+=`<tr><td>${A}.${sec}.${n}</td><td>${d}</td><td>${x.u}</td><td class="n">${N(q)}</td><td class="n">${N(x.pu,0)}</td><td class="n">${N(m,0)}</td></tr>`});
+    h+=`<tr class="tot"><td></td><td colspan="4">Total ${c}</td><td class="n">${N(t,0)}</td></tr>`;pt+=t});
+   h+=`<tr class="tot"><td></td><td colspan="4">TOTAL ${pn} – ${L.n.toUpperCase()}</td><td class="n">${N(pt,0)}</td></tr>`;R2('','TOTAL '+pn+' – '+L.n.toUpperCase(),pt);lvt+=pt;pht[k]+=pt});
+  h+=`<tr class="big"><td></td><td colspan="4">TOTAL GÉNÉRAL ${L.n.toUpperCase()}</td><td class="n">${N(lvt,0)}</td></tr>`;R2('','TOTAL GÉNÉRAL '+L.n.toUpperCase(),lvt);lt.push(lvt)});
+ const G=lt.reduce((a,b)=>a+b,0),im=G*S.p.imp/100,ht=G+im,tv=ht*S.p.tva/100;
+ const rc=(l,v,c)=>{R2('',l,v);return`<tr class="${c||''}"><td></td><td colspan="4">${l}</td><td class="n">${N(v,0)}</td></tr>`};
+ h+=`<tr class="ph"><td></td><td colspan="5">RÉCAPITULATIF GÉNÉRAL</td></tr>`+S.lv.map((L,i)=>rc(String.fromCharCode(65+i)+' – Total '+L.n,lt[i],'tot')).join('')
+  +rc('TOTAL TRAVAUX HT',G,'tot')+rc('Aléas et imprévus ('+S.p.imp+' %)',im)+rc('TOTAL HT',ht,'tot')+rc('TVA ('+S.p.tva+' %)',tv)+rc('TOTAL GÉNÉRAL TTC',ht+tv,'big');
+ h+=`</table><p class="hint">Gros œuvre ${N(pht.go,0)} · Second œuvre ${N(pht.so,0)} · Finition ${N(pht.fi,0)} FCFA — Coût HT au m² de plancher : ${R.plan?N(ht/R.plan,0):'–'} FCFA/m²</p>`;window._rows=rows;return h}
+function expDqe(){dl('devis.csv',['N°;Désignation;Unité;Quantité;PU;Montant',...window._rows.map(r=>r.join(';'))].join('\n'))}
+const PMK=[['ciment','Ciment (sac 50 kg)'],['sable','Sable (m³)'],['gravier','Gravier (m³)'],['eau','Eau (m³)'],['agglo','Aggloméré (unité)'],...D.map(d=>[d,'Acier '+d+' (kg)'])];
+function mat(){const R=calc(),p=S.p,pe=1+p.pe/100,pm=S.pm,lvs=R.lv.map(o=>({n:o.n,sacs:o.sacs,sab:o.sab,gra:o.gra,eau:o.eau,ag:o.ag,ac:o.ac,vol:o.vol}));
+ const T={n:'RÉCAPITULATIF GÉNÉRAL – tous niveaux',sacs:0,sab:0,gra:0,eau:0,ag:0,vol:0,ac:D.map(()=>0)};
+ lvs.forEach(o=>{['sacs','sab','gra','eau','ag','vol'].forEach(k=>T[k]+=o[k]);o.ac.forEach((v,j)=>T.ac[j]+=v)});
+ const W=d=>Math.PI*((+d.slice(2)/1000)**2)/4*7850,sums=[];
+ const tbl=(o,big)=>{let tot=0,h=`<h2>${big?'':'Niveau : '}${o.n}</h2><table><tr><th>Matériau</th><th>Unité</th><th>Qté nette</th><th>Qté à acheter (+${p.pe} %)</th><th>Barres 12 m</th><th>Barres 6 m</th><th>PU (FCFA)</th><th>Total achat (FCFA)</th></tr>`;
+  const L=[['Ciment (sacs de 50 kg)','sac',o.sacs,'ciment',0],['Sable','m³',o.sab,'sable',2],['Gravier','m³',o.gra,'gravier',2],['Eau','m³',o.eau,'eau',2],['Agglomérés','u',o.ag,'agglo',0],...D.map((d,j)=>['Acier '+d,'kg',o.ac[j],d,1,d])];
+  L.forEach(([nm,u,q,k,dec,d])=>{const b=dec==0?Math.ceil(q*pe):q*pe,m=b*(pm[k]||0);tot+=m;
+   h+=`<tr><td>${nm}</td><td>${u}</td><td class="n">${N(q,dec==0?1:2)}</td><td class="n"><b>${N(b,dec)}</b></td><td class="n">${d?Math.ceil(b/(W(d)*12)):''}</td><td class="n">${d?Math.ceil(b/(W(d)*6)):''}</td><td class="n">${pm[k]?N(pm[k],0):'<span style="background:#FFF2CC">à saisir</span>'}</td><td class="n">${N(m,0)}</td></tr>`});
+  const kg=o.ac.reduce((a,b)=>a+b,0);
+  h+=`<tr class="tot"><td colspan="2">Béton coulé : ${N(o.vol)} m³ · Acier total : ${N(kg,0)} kg (${N(kg/1000,3)} t)</td><td colspan="5">TOTAL ACHAT MATÉRIAUX ${o.n.toUpperCase()}</td><td class="n">${N(tot,0)}</td></tr></table>`;sums.push([o.n,tot]);return h};
+ let h=`<div class="np"><button class="b" onclick="window.print()">🖨 Imprimer / PDF</button></div><h2>Prix d'achat des matériaux (FCFA)</h2><div class="card"><div class="g">${PMK.map(([k,l])=>`<div><label>${l}</label><input class="num" style="width:100%;${pm[k]?'':'background:#FFF2CC'}" value="${pm[k]||0}" onchange="S.pm['${k}']=parseFloat(this.value.replace(',','.'))||0;render()"></div>`).join('')}<div><label>Marge de perte (%)</label>${inp(p,'pe','S.p')}</div></div></div>
+<p class="hint">Quantités calculées par étage depuis l'architecture et la structure. Ciment : béton (BP ${p.bp}, dallage ${p.da}, béton armé ${p.ba} kg/m³) + mortiers et enduits ; eau : ${p.eau} L par kg de ciment.</p>`;
+ lvs.forEach(o=>h+=tbl(o,false));h+=tbl(T,true);
+ h+=`<h2>Total achat par niveau</h2><table><tr><th>Niveau</th><th>Achat matériaux (FCFA)</th></tr>${sums.slice(0,-1).map(([n,t])=>`<tr><td>${n}</td><td class="n">${N(t,0)}</td></tr>`).join('')}<tr class="big"><td>TOTAL GÉNÉRAL ACHAT MATÉRIAUX</td><td class="n">${N(sums[sums.length-1][1],0)}</td></tr></table>`;return h}
+// ---------- intervenants
+function totPh(){const R=calc(),t={go:0,so:0,fi:0};S.px.forEach(x=>{t[x.ph]+=qtot(x,R)*x.pu});return t}
+const IG={pil:'PILOTAGE ET ÉTUDES',go:'GROS ŒUVRE',so:'SECOND ŒUVRE',fi:'FINITION'};
+function iv(){const t=totPh(),G=t.go+t.so+t.fi,ST=['À consulter','Consulté','Devis reçu','Retenu','Contrat signé'];
+ return`<h2>Maître d'œuvre et prestataires</h2><p class="hint">Proposition automatique d'intervenants par lot. « Part » = répartition indicative du montant du lot (modifiable) ; pour le pilotage, c'est un pourcentage d'honoraires sur le total HT (0 par défaut). Renseignez le nom, le contact et le montant convenu de chaque intervenant.</p>
+${Object.entries(IG).map(([g,gn])=>{const base=g=='pil'?G:t[g],ids=S.iv.map((x,i)=>i).filter(i=>S.iv[i].g==g);
+ return`<h2 style="background:#1F3864;color:#fff;padding:6px 10px;border-radius:5px">${gn}${g=='pil'?'':' – '+N(base,0)+' FCFA'}</h2><table><tr><th>Intervenant / corps de métier</th><th>Mission</th><th>${g=='pil'?'Honoraires %':'Part %'}</th><th>Montant estimé</th><th>Nom / entreprise</th><th>Contact</th><th>Montant convenu</th><th>Statut</th><th></th></tr>
+${ids.map(i=>{const x=S.iv[i];return`<tr><td>${inp(x,'r',`S.iv[${i}]`,0,'')}</td><td>${inp(x,'m',`S.iv[${i}]`,0,'')}</td><td style="width:64px">${inp(x,'pc',`S.iv[${i}]`)}</td><td class="n">${N(base*x.pc/100,0)}</td><td>${inp(x,'nom',`S.iv[${i}]`,0,'')}</td><td>${inp(x,'ct',`S.iv[${i}]`,0,'')}</td><td>${inp(x,'cv',`S.iv[${i}]`)}</td>
+<td><select onchange="S.iv[${i}].st=this.value;render()">${ST.map(v=>`<option ${v==x.st?'selected':''}>${v}</option>`).join('')}</select></td><td><button class="x" onclick="S.iv.splice(${i},1);render()">✕</button></td></tr>`}).join('')}
+<tr class="tot"><td colspan="2">Total ${gn.toLowerCase()}</td><td class="n">${N(ids.reduce((a,i)=>a+S.iv[i].pc,0),1)} %</td><td class="n">${N(ids.reduce((a,i)=>a+base*S.iv[i].pc/100,0),0)}</td><td colspan="2"></td><td class="n">${N(ids.reduce((a,i)=>a+S.iv[i].cv,0),0)}</td><td colspan="2"></td></tr></table>
+<button class="b" onclick="S.iv.push({g:'${g}',r:'Nouvel intervenant',m:'',pc:0,nom:'',ct:'',cv:0,st:'À consulter'});render()">+ Ajouter un intervenant</button>`}).join('')}`}
+// ---------- projets
+function proj(){const I=idx().sort((a,b)=>b.maj-a.maj);
+ return`<h2>Mes projets</h2><p class="hint">Chaque projet regroupe ses niveaux, sa structure, ses prix, son devis, ses matériaux et ses intervenants. L'enregistrement est automatique dans ce navigateur (bouton « Enregistrer » pour forcer). Pour sauvegarder ou changer d'ordinateur, utilisez « Exporter ».</p>
+${bkBanner(I)}<button class="b" onclick="newP()">+ Nouveau projet</button><button class="b" style="background:#1a7f37" onclick="backupAll()">💾 Sauvegarde complète (tous les projets)</button><button class="b" onclick="document.getElementById('lf').click()">📂 Importer / restaurer (fichier .json)</button>
+<table><tr><th>Projet</th><th>Dernière modification</th><th>Niveaux</th><th>Total TTC (FCFA)</th><th style="width:330px"></th></tr>
+${I.length?I.map(x=>`<tr ${x.id==S.id?'style="background:#eef6ff"':''}><td><b>${x.nom}</b>${x.id==S.id?' <span class="hint">(ouvert)</span>':''}</td><td>${new Date(x.maj).toLocaleString('fr-FR')}</td><td class="n">${x.nl}</td><td class="n">${N(x.ttc,0)}</td>
+<td><button class="b" onclick="openP('${x.id}')">Ouvrir</button><button class="b" onclick="dupP('${x.id}')">Dupliquer</button><button class="b" onclick="expP('${x.id}')">Exporter</button><button class="b r" onclick="delP('${x.id}')">Supprimer</button></td></tr>`).join(''):'<tr><td colspan="5">Aucun projet enregistré.</td></tr>'}</table>`}
+function openP(id){save();const x=localStorage.getItem('dbat_p_'+id);if(!x)return;S=JSON.parse(x);LAST='';mig();T='arch';render()}
+function newP(){const n=prompt('Nom du nouveau projet ?');if(n===null)return;save();S=def();S.id=undefined;S.nom=n||'Projet sans nom';mig();LAST='';T='arch';render()}
+function dupP(id){save();const x=JSON.parse(localStorage.getItem('dbat_p_'+id));x.id=undefined;x.nom=(x.nom||'Projet')+' (copie)';S=x;mig();LAST='';save(true);T='proj';render()}
+function expP(id){const x=localStorage.getItem('dbat_p_'+id);if(x)dl((JSON.parse(x).nom||'projet')+'.json',x,'application/json')}
+function delP(id){if(!confirm('Supprimer définitivement ce projet ?'))return;try{localStorage.removeItem('dbat_p_'+id);localStorage.setItem('dbat_idx',JSON.stringify(idx().filter(x=>x.id!=id)))}catch(e){}
+ if(S.id==id){const I=idx();S=I.length?JSON.parse(localStorage.getItem('dbat_p_'+I[0].id)):def();mig();LAST=JSON.stringify(S);if(!I.length)S.id=undefined}render()}
+// ---------- import PDF (lecture du texte des plans, coupes et notes de structure)
+let IMP=null;
+const nb=x=>parseFloat(String(x).replace(',','.'));
+function loadPdf(){return window.pdfjsLib?Promise.resolve():new Promise((ok,ko)=>{const c='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/',e=document.createElement('script');e.src=c+'pdf.min.js';
+ e.onload=()=>{pdfjsLib.GlobalWorkerOptions.workerSrc=c+'pdf.worker.min.js';ok()};e.onerror=()=>ko(new Error('Lecteur PDF indisponible : une connexion internet est nécessaire pour cet import.'));document.head.appendChild(e)})}
+async function pdfLines(f){await loadPdf();const d=await pdfjsLib.getDocument({data:await f.arrayBuffer()}).promise,out=[];
+ for(let n=1;n<=d.numPages;n++){const t=await(await d.getPage(n)).getTextContent(),m={};t.items.forEach(it=>{const y=Math.round(it.transform[5]/3);(m[y]=m[y]||[]).push([it.transform[4],it.str])});
+  Object.keys(m).sort((a,b)=>b-a).forEach(y=>out.push(m[y].sort((a,b)=>a[0]-b[0]).map(x=>x[1]).join(' ').replace(/\s+/g,' ').trim()))}
+ return out.filter(Boolean)}
+async function doImp(kind,el){const f=el.files[0];if(!f)return;const li=+document.getElementById('impLv').value;IMP={kind,li,busy:true,name:f.name};render();
+ try{const L=await pdfLines(f);IMP={kind,li,name:f.name,n:L.length,...(kind=='str'?anaStr(L):anaPlan(L,kind))}}catch(e){IMP={kind,li,name:f.name,err:e.message}}render()}
+function anaPlan(L,kind){const t=L.join('\n'),r={surf:[],tot:null,lin:[],h:[]};
+ [...t.matchAll(/(\d+[.,]?\d*)\s*m\s*[²2]/gi)].forEach(m=>{const v=nb(m[1]);if(v>0&&v<5000)r.surf.push(v)});
+ L.forEach(l=>{const m=l.match(/(surface\s*(b[âa]tie|totale|construite|de plancher|emprise)|emprise)[^\d]{0,25}(\d+[.,]?\d*)/i);if(m&&!r.tot)r.tot=nb(m[3])});
+ [...t.matchAll(/(\d+[.,]?\d*)\s*(ml|m\.l)\b/gi)].forEach(m=>r.lin.push(nb(m[1])));
+ [...t.matchAll(/(?:h(?:auteur|t|sp)?\.?\s*(?:sous\s*plafond)?)\s*[=:]\s*(\d[.,]\d{1,2})/gi)].forEach(m=>{const v=nb(m[1]);if(v>=2&&v<=6)r.h.push(v)});
+ const cotes=[...new Set([...t.matchAll(/(?:^|\s)\+\s?(\d{1,2}[.,]\d{2})/g)].map(m=>nb(m[1])))].sort((a,b)=>a-b);r.cotes=cotes;
+ if(cotes.length>1){r.dh=[];for(let i=1;i<cotes.length;i++){const d=+(cotes[i]-cotes[i-1]).toFixed(2);if(d>=2&&d<=6)r.dh.push(d)}}
+ return r}
+const KW={BP:/propret/i,Semelles:/semelle/i,Longrines:/longrine/i,Poteaux:/poteau/i,Poutres:/poutre/i,Chaînages:/cha[iî]nage/i,Escaliers:/escalier/i,Voiles:/voile/i,Dalles:/dalle|plancher/i};
+function anaStr(L){const rows={};let cur=null;
+ L.forEach(l=>{for(const e in KW)if(KW[e].test(l)){cur=e;rows[e]=rows[e]||{e,v:0,a:D.map(()=>0)};const m=l.match(/(\d+[.,]?\d*)\s*m\s*[3³]/i);if(m&&!rows[e].v)rows[e].v=nb(m[1]);break}
+  if(cur)[...l.matchAll(/HA\s?(\d{1,2})\D{0,14}?(\d+[.,]?\d*)\s*kg/gi)].forEach(m=>{const k=D.indexOf('HA'+m[1]);if(k>=0&&!rows[cur].a[k])rows[cur].a[k]=nb(m[2])})});
+ return{rows:Object.values(rows).filter(r=>r.v||r.a.some(x=>x))}}
+function impPanel(kind){const lv=`<select id="impLv" style="width:auto">${S.lv.map((L,i)=>`<option value="${i}" ${IMP&&IMP.li==i?'selected':''}>${L.n}</option>`).join('')}</select>`;
+ let h=`<div class="card np"><p class="hint">Le logiciel lit le <b>texte</b> des PDF (surfaces annotées, cotes de niveaux, notes de calcul) et vous propose les valeurs à appliquer ; rien n'est modifié sans votre clic. Les plans scannés (images) ne contiennent pas de texte et ne peuvent pas être lus. Connexion internet requise pour l'import.</p>
+ Niveau : ${lv} ${kind=='arch'?`<button class="b" style="background:#1a7f37" onclick="openMes()">📏 Mesurer sur un plan</button><button class="b" onclick="document.getElementById('f1').click()">📄 Plan d'étage (PDF)</button><input type="file" id="f1" accept=".pdf" style="display:none" onchange="doImp('plan',this)"><button class="b" onclick="document.getElementById('f2').click()">📐 Coupe (PDF)</button><input type="file" id="f2" accept=".pdf" style="display:none" onchange="doImp('coupe',this)">`
+ :`<button class="b" onclick="document.getElementById('f3').click()">📄 Dossier structure (PDF)</button><input type="file" id="f3" accept=".pdf" style="display:none" onchange="doImp('str',this)">`}`;
+ const ok=IMP&&(kind=='arch'?IMP.kind!='str':IMP.kind=='str');
+ if(ok){if(IMP.busy)h+='<p>Lecture du PDF…</p>';else if(IMP.err)h+=`<p style="color:#b33">${IMP.err}</p>`;else{const c=(v,f)=>`<button class="b" onclick="${f}(${v})">${N(v)}</button>`;h+=`<hr><b>${IMP.name}</b> – ${IMP.n} lignes de texte lues.`;
+  if(IMP.kind=='str'){h+=IMP.rows.length?`<table><tr><th>Élément</th><th>Volume (m³)</th>${D.map(d=>`<th>${d} kg</th>`).join('')}</tr>${IMP.rows.map(r=>`<tr><td>${r.e}</td><td class="n">${N(r.v)}</td>${r.a.map(x=>`<td class="n">${x?N(x,1):''}</td>`).join('')}</tr>`).join('')}</table><button class="b" onclick="apStr()">✔ Appliquer au niveau ${S.lv[IMP.li].n}</button>`:'<p>Aucun élément de structure reconnu (mots-clés : poteau, poutre, semelle, longrine, chaînage, dalle… avec « m3 » ou « HA10 … kg »).</p>'}
+  else if(IMP.kind=='plan'){h+=`<p>Surface bâtie annoncée : ${IMP.tot?c(IMP.tot,'apS'):'non trouvée'} · Somme des surfaces de pièces : ${IMP.surf.length?c(+IMP.surf.reduce((a,b)=>a+b,0).toFixed(2),'apS'):'aucune'}</p><p>Linéaires détectés (ml) : ${IMP.lin.length?IMP.lin.map(v=>c(v,'apL')).join(''):'aucun'}</p><p>Hauteurs détectées : ${IMP.h.length?[...new Set(IMP.h)].map(v=>c(v,'apH')).join(''):'aucune'}</p><p class="hint">Cliquez sur une valeur pour l'appliquer au niveau ${S.lv[IMP.li].n}. Le linéaire de murs se déduit rarement du texte : saisissez-le si absent.</p>`}
+  else h+=`<p>Cotes de niveaux : ${IMP.cotes.length?IMP.cotes.map(N).join(' · '):'aucune'}</p><p>Hauteurs d'étages déduites : ${IMP.dh&&IMP.dh.length?IMP.dh.map(N).join(' · ')+' <button class="b" onclick="apDh()">✔ Appliquer aux niveaux dans l\'ordre</button>':'non déterminées'}</p>`}}
+ return h+'</div>'}
+const apS=v=>{S.lv[IMP.li].s=v;render()},apL=v=>{S.lv[IMP.li].l=v;render()},apH=v=>{S.lv[IMP.li].h=v;render()};
+function apDh(){IMP.dh.forEach((v,i)=>{if(S.lv[i])S.lv[i].h=v});render()}
+function apStr(){IMP.rows.forEach(x=>{let r=S.st.find(q=>q.l==IMP.li&&q.e==x.e);if(!r){r={l:IMP.li,e:x.e,v:0,a:D.map(()=>0)};S.st.push(r)}if(x.v)r.v=x.v;x.a.forEach((k,j)=>{if(k)r.a[j]=k})});render()}
+// ---------- outil de mesure sur plan (PDF ou image)
+let M=null;
+const dist=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1]);
+const area=P=>Math.abs(P.reduce((t,p,i)=>{const q=P[(i+1)%P.length];return t+p[0]*q[1]-q[0]*p[1]},0))/2;
+const plen=P=>P.reduce((t,p,i)=>i?t+dist(P[i-1],p):0,0);
+function openMes(){if(document.getElementById('mes'))return;const li=document.getElementById('impLv')?document.getElementById('impLv').value:0,o=document.createElement('div');o.id='mes';o.tabIndex=0;
+ o.innerHTML=`<div class="mt"><b>📏 Mesure sur plan</b><button class="b" onclick="document.getElementById('mf').click()">Ouvrir plan (PDF / image)</button><input type="file" id="mf" accept=".pdf,image/*" style="display:none" onchange="mesFile(this)">
+ <select id="mp" style="display:none" onchange="mesPage(+this.value)"></select>
+ <button class="b" id="m_cal" onclick="mesMode('cal')">1. Échelle</button><button class="b" id="m_l" onclick="mesMode('l')">2. Linéaire (murs)</button><button class="b" id="m_s" onclick="mesMode('s')">3. Surface</button><button class="b" id="m_h" onclick="mesMode('h')">4. Hauteur (coupe)</button>
+ <button class="b" onclick="mesEnd()">Terminer la forme (Entrée)</button><button class="b" onclick="mesUndo()">↶ Annuler</button><button class="b" onclick="mesZoom(1.25)">＋</button><button class="b" onclick="mesZoom(.8)">－</button>
+ Niveau : <select id="ml">${S.lv.map((L,i)=>`<option value="${i}" ${i==li?'selected':''}>${L.n}</option>`).join('')}</select>
+ <button class="b" style="background:#1a7f37" onclick="mesApply('s')">✔ → Surface bâtie</button><button class="b" style="background:#1a7f37" onclick="mesApply('l')">✔ → Linéaire murs</button><button class="b" style="background:#1a7f37" onclick="mesApply('h')">✔ → Hauteur</button>
+ <button class="b" style="background:#e67e00;font-weight:bold" onclick="mesSave()">💾 ENREGISTRER dans le projet</button><button class="b r" onclick="document.getElementById('mes').remove();M=null">Fermer</button></div>
+ <div class="ms" id="ms"></div><div class="cw" id="mcw"><canvas id="mc"></canvas></div>`;
+ document.body.appendChild(o);M={z:.5,mode:'cal',cur:[],sh:[],k:0,W:0,H:0};const cv=document.getElementById('mc');
+ cv.addEventListener('click',mesClick);cv.addEventListener('dblclick',()=>{M.cur.pop();mesEnd()});
+ o.addEventListener('keydown',e=>{if(e.key=='Enter')mesEnd();if(e.key=='Escape'){M.cur=[];redraw()}if(e.ctrlKey&&e.key=='z')mesUndo()});o.focus();mesMode('cal')}
+function mesMode(m){if(!M)return;M.mode=m;M.cur=[];['cal','l','s','h'].forEach(k=>{const b=document.getElementById('m_'+k);if(b)b.classList.toggle('on',k==m)});
+ mesMsg(({cal:'Cliquez 2 points d\'une longueur connue (une cote, un mur côté), puis saisissez sa longueur réelle en mètres.',l:'Cliquez le long des murs ; Maj = trait horizontal/vertical ; double-clic ou Entrée = terminer un tracé.',s:'Cliquez les sommets du contour du bâtiment ; double-clic ou Entrée = fermer la surface.',h:'Sur la coupe (échelle faite sur la coupe) : cliquez 2 points en bas et en haut de la hauteur à lire.'})[m]);redraw()}
+function mesMsg(t){const T=mesTot();document.getElementById('ms').innerHTML=(M.k?`Échelle : ${M.k.toFixed(5)} m/px`:'<b style="color:#b33">Échelle non définie</b>')+` — Linéaire : <b>${N(T.l)} m</b> · Surface : <b>${N(T.s)} m²</b> · Dernière hauteur : <b>${N(T.h)} m</b><br>${t||''}`}
+function mesTot(){const k=M.k||0,T={l:0,s:0,h:0};M.sh.forEach(x=>{if(x.t=='l')T.l+=plen(x.p)*k;else if(x.t=='s')T.s+=area(x.p)*k*k;else if(x.t=='h')T.h=plen(x.p)*k});return T}
+async function mesFile(el){const f=el.files[0];if(!f)return;M.sh=[];M.k=0;
+ try{if(/pdf$/i.test(f.name)){await loadPdf();M.doc=await pdfjsLib.getDocument({data:await f.arrayBuffer()}).promise;const sp=document.getElementById('mp');sp.innerHTML=Array.from({length:M.doc.numPages},(_,i)=>`<option value="${i+1}">Page ${i+1}</option>`).join('');sp.style.display=M.doc.numPages>1?'':'none';await mesPage(1)}
+ else{const im=new Image();im.onload=()=>mesBg(im,im.width,im.height);im.src=URL.createObjectURL(f)}}catch(e){alert(e.message)}}
+async function mesPage(n){const pg=await M.doc.getPage(n),vp=pg.getViewport({scale:2}),c=document.createElement('canvas');c.width=vp.width;c.height=vp.height;await pg.render({canvasContext:c.getContext('2d'),viewport:vp}).promise;M.sh=[];M.k=0;mesBg(c,c.width,c.height)}
+function mesBg(src,W,H){M.bg=src;M.W=W;M.H=H;const cv=document.getElementById('mc');cv.width=W;cv.height=H;M.z=Math.min(1,(document.getElementById('mcw').clientWidth-20)/W);mesMode('cal')}
+function mesZoom(f){M.z*=f;redraw()}
+function mesClick(e){if(!M.bg)return;const cv=e.target,r=cv.getBoundingClientRect();let p=[(e.clientX-r.left)/M.z,(e.clientY-r.top)/M.z];const q=M.cur[M.cur.length-1];
+ if(e.shiftKey&&q){Math.abs(p[0]-q[0])>Math.abs(p[1]-q[1])?p[1]=q[1]:p[0]=q[0]}M.cur.push(p);
+ if(M.mode=='cal'&&M.cur.length==2){const d=dist(M.cur[0],M.cur[1]),v=parseFloat((prompt('Longueur réelle de ce segment (en mètres) ?')||'').replace(',','.'));if(v>0){M.k=v/d;M.cur=[];mesMode('l');return}M.cur=[]}
+ if(M.mode=='h'&&M.cur.length==2){M.sh.push({t:'h',p:M.cur});M.cur=[]}redraw();mesMsg()}
+function mesEnd(){if(!M||!M.bg)return;const n=M.cur.length;if((M.mode=='l'&&n>=2)||(M.mode=='s'&&n>=3)){M.sh.push({t:M.mode,p:M.cur});M.cur=[]}redraw();mesMsg()}
+function mesUndo(){if(M.cur.length)M.cur.pop();else M.sh.pop();redraw();mesMsg()}
+function redraw(){if(!M||!M.bg)return;const cv=document.getElementById('mc'),c=cv.getContext('2d');cv.style.width=M.W*M.z+'px';c.drawImage(M.bg,0,0);const lw=2.5/M.z,col={l:'#d00',s:'#0a7',h:'#00c'};
+ const dr=(P,st,cl,close)=>{if(!P.length)return;c.strokeStyle=cl;c.fillStyle=cl;c.lineWidth=lw;c.beginPath();P.forEach((q,i)=>i?c.lineTo(q[0],q[1]):c.moveTo(q[0],q[1]));if(close&&P.length>2)c.closePath();c.stroke();if(close&&P.length>2){c.globalAlpha=.18;c.fill();c.globalAlpha=1}P.forEach(q=>{c.beginPath();c.arc(q[0],q[1],3.5/M.z,0,7);c.fill()})};
+ M.sh.forEach(x=>dr(x.p,0,col[x.t],x.t=='s'));dr(M.cur,0,M.mode=='cal'?'#f80':(col[M.mode]||'#f80'),M.mode=='s')}
+function mesApply(k){const T=mesTot(),i=+document.getElementById('ml').value,L=S.lv[i];if(!M.k){alert('Définissez d\'abord l\'échelle.');return}
+ const v={s:T.s,l:T.l,h:T.h}[k];if(!(v>0)){alert('Aucune mesure de ce type.');return}L[k]=+v.toFixed(2);save(true);render();mesMsg(`✔ ${k=='s'?'Surface bâtie':k=='l'?'Linéaire de murs':'Hauteur'} de ${L.n} = ${N(v)} appliquée. Fermez la fenêtre pour voir le résultat dans l'onglet Architecture.`)}
+function mesSave(){if(!M.k){alert('Définissez d\'abord l\'échelle.');return}const T2=mesTot(),L=S.lv[+document.getElementById('ml').value],d=[];
+ [['s','Surface bâtie',T2.s,'m²'],['l','Linéaire de murs',T2.l,'m'],['h','Hauteur',T2.h,'m']].forEach(([k,n,v,u])=>{if(v>0){L[k]=+v.toFixed(2);d.push(n+' '+N(v)+' '+u)}});
+ if(!d.length){alert('Aucune mesure à enregistrer.');return}save(true);render();mesMsg('✔ Enregistré dans le projet « '+(S.nom||'sans nom')+' », niveau '+L.n+' : '+d.join(' · '))}
+// ---------- fichiers
+function dl(name,txt,type='text/csv'){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\ufeff'+txt],{type}));a.download=name;a.click()}
+function saveF(){dl((S.nom||'projet')+'.json',JSON.stringify(S),'application/json')}
+function loadF(el){const f=el.files[0];if(f)f.text().then(t=>{try{const x=JSON.parse(t.replace(/^\ufeff/,''));save();
+ if(x&&Array.isArray(x.projets)){const over=confirm('Sauvegarde de '+x.projets.length+' projet(s).\nOK = remplacer les projets existants de même identifiant.\nAnnuler = les ajouter comme nouveaux projets.');let n=0;
+  x.projets.forEach(q=>{if(!q||!q.lv)return;if(!q.id||(!over&&idx().some(i=>i.id==q.id)))q.id='p'+Date.now().toString(36)+(n++);else n++;S=q;mig();LAST='';save(true)});
+  T='proj';render();alert(n+' projet(s) restauré(s).');return}
+ S=x;S.id=undefined;mig();LAST='';save(true);T='arch';render()}catch(e){alert('Fichier invalide')}});el.value=''}
+function backupAll(){save();const P=idx().map(i=>{try{return JSON.parse(localStorage.getItem('dbat_p_'+i.id))}catch(e){return null}}).filter(Boolean);
+ if(!P.length){alert('Aucun projet à sauvegarder.');return}const d=new Date().toISOString().slice(0,10);
+ dl('DevisBat_sauvegarde_'+d+'.json',JSON.stringify({app:'DevisBat',v:1,date:new Date().toISOString(),projets:P}),'application/json');
+ try{localStorage.setItem('dbat_bk',Date.now())}catch(e){}render()}
+function bkBanner(I){if(!I.length)return'';const b=+localStorage.getItem('dbat_bk')||0,j=b?Math.floor((Date.now()-b)/864e5):null;
+ return j!==null&&j<7?`<p class="hint" style="color:#1a7f37">✔ Dernière sauvegarde complète : ${j==0?'aujourd\'hui':'il y a '+j+' jour(s)'}.</p>`:`<div class="card" style="background:#FFF2CC">⚠ ${b?'Dernière sauvegarde complète il y a '+j+' jours.':'Aucune sauvegarde complète effectuée.'} Cliquez sur « Sauvegarde complète » pour télécharger tous vos projets dans un seul fichier.</div>`}
+mig();render();
+</script></body></html>
